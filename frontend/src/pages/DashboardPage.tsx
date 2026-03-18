@@ -1,18 +1,21 @@
 import { useState } from 'react'
-import { 
-  Row, 
-  Col, 
-  Card, 
-  Button, 
-  Table, 
-  Modal, 
-  Form, 
-  Input, 
-  message, 
+import {
+  Row,
+  Col,
+  Card,
+  Button,
+  Table,
+  Modal,
+  Form,
+  Input,
+  message,
   Typography,
   Space,
   Tag,
+  Radio,
+  Tooltip,
 } from 'antd'
+import { BrainOutlined, FolderOpenOutlined, SyncOutlined } from '@ant-design/icons'
 import {
   PlusOutlined,
   ProjectOutlined,
@@ -39,6 +42,7 @@ export default function DashboardPage() {
   const [showStartModal, setShowStartModal] = useState(false)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [projectMode, setProjectMode] = useState<'new' | 'existing'>('new')
   const [form] = Form.useForm()
   const [workflowForm] = Form.useForm()
 
@@ -60,15 +64,26 @@ export default function DashboardPage() {
   // Mutations
   const createProjectMutation = useMutation({
     mutationFn: projectsApi.create,
-    onSuccess: () => {
-      message.success('專案建立成功')
+    onSuccess: (project) => {
+      if (project.codebase_path) {
+        message.success('專案建立成功，正在喚醒 Code Architect 記憶...')
+      } else {
+        message.success('專案建立成功')
+      }
       setShowCreateModal(false)
+      setProjectMode('new')
       form.resetFields()
       queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
     onError: (error: any) => {
       message.error(error.response?.data?.detail || '建立專案失敗')
     },
+  })
+
+  const wakeArchitectMutation = useMutation({
+    mutationFn: (id: string) => projectsApi.wakeArchitect(id),
+    onSuccess: () => message.success('Code Architect 已觸發重新分析'),
+    onError: () => message.error('無法連接 Code Architect (port 8001)'),
   })
 
   const deleteProjectMutation = useMutation({
@@ -157,6 +172,29 @@ export default function DashboardPage() {
       dataIndex: 'description',
       key: 'description',
       render: (text: string) => text || <Text type="secondary">無描述</Text>,
+    },
+    {
+      title: '程式碼記憶',
+      dataIndex: 'codebase_path',
+      key: 'codebase_path',
+      render: (path: string | undefined, record: Project) =>
+        path ? (
+          <Tooltip title={path}>
+            <Space size={4}>
+              <Tag icon={<BrainOutlined />} color="purple" style={{ cursor: 'default' }}>
+                已連結
+              </Tag>
+              <Button
+                size="small"
+                icon={<SyncOutlined />}
+                loading={wakeArchitectMutation.isPending}
+                onClick={() => wakeArchitectMutation.mutate(record.id)}
+              />
+            </Space>
+          </Tooltip>
+        ) : (
+          <Text type="secondary" style={{ fontSize: 12 }}>—</Text>
+        ),
     },
     {
       title: '狀態',
@@ -344,10 +382,11 @@ export default function DashboardPage() {
         open={showCreateModal}
         onCancel={() => {
           setShowCreateModal(false)
+          setProjectMode('new')
           form.resetFields()
         }}
         footer={null}
-        width={520}
+        width={560}
       >
         <Form
           form={form}
@@ -355,39 +394,77 @@ export default function DashboardPage() {
           onFinish={handleCreateProject}
           style={{ marginTop: 20 }}
         >
+          <Form.Item label="專案類型" required>
+            <Radio.Group
+              value={projectMode}
+              onChange={(e) => {
+                setProjectMode(e.target.value)
+                form.setFieldValue('codebase_path', undefined)
+              }}
+            >
+              <Radio.Button value="new">
+                ✨ 全新專案
+              </Radio.Button>
+              <Radio.Button value="existing">
+                <FolderOpenOutlined /> 現有程式碼庫
+              </Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+
+          {projectMode === 'existing' && (
+            <Form.Item
+              name="codebase_path"
+              label="程式碼路徑"
+              extra="本機絕對路徑，Code Architect 將自動分析並建立記憶"
+              rules={[{ required: true, message: '請輸入程式碼路徑' }]}
+            >
+              <Input
+                prefix={<FolderOpenOutlined />}
+                placeholder="/Users/yourname/projects/my-app"
+              />
+            </Form.Item>
+          )}
+
           <Form.Item
             name="name"
             label="專案名稱"
             rules={[
               { required: true, message: '請輸入專案名稱' },
-              { min: 2, message: '專案名稱至少需要 2 個字符' }
+              { min: 2, message: '專案名稱至少需要 2 個字符' },
             ]}
           >
             <Input placeholder="輸入專案名稱" />
           </Form.Item>
 
-          <Form.Item
-            name="description"
-            label="專案描述"
-          >
-            <TextArea 
+          <Form.Item name="description" label="專案描述">
+            <TextArea
               placeholder="描述專案的目標和內容（選填）"
               rows={3}
             />
           </Form.Item>
 
+          {projectMode === 'existing' && (
+            <div style={{
+              background: '#f6ffed', border: '1px solid #b7eb8f',
+              borderRadius: 6, padding: '8px 12px', marginBottom: 16, fontSize: 13,
+            }}>
+              🧠 建立後會自動呼叫 Code Architect (port 8001) 分析程式碼，喚醒架構記憶。
+            </div>
+          )}
+
           <Form.Item style={{ marginBottom: 0 }}>
             <Space>
-              <Button 
-                type="primary" 
+              <Button
+                type="primary"
                 htmlType="submit"
                 loading={createProjectMutation.isPending}
               >
                 建立專案
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
                   setShowCreateModal(false)
+                  setProjectMode('new')
                   form.resetFields()
                 }}
               >

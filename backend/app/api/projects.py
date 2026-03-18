@@ -3,6 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
 from pydantic import BaseModel
 from typing import List, Optional
+import asyncio
+import httpx
+import os
 
 from app.db.base import get_db
 from app.models.user import User
@@ -12,6 +15,8 @@ from app.models.artifact import Artifact
 from app.models.agent_session import AgentSession
 from app.api.auth import get_current_user
 
+CODE_ARCHITECT_URL = os.getenv("CODE_ARCHITECT_URL", "http://localhost:8001")
+
 # Router
 projects_router = APIRouter()
 
@@ -20,6 +25,7 @@ projects_router = APIRouter()
 class CreateProjectRequest(BaseModel):
     name: str
     description: Optional[str] = None
+    codebase_path: Optional[str] = None  # local path to link with code-architect
 
 
 class ProjectResponse(BaseModel):
@@ -27,6 +33,7 @@ class ProjectResponse(BaseModel):
     name: str
     description: Optional[str]
     status: str
+    codebase_path: Optional[str] = None
     latest_run_id: Optional[str] = None
     created_by: str
     created_at: str
@@ -51,18 +58,24 @@ async def create_project(
         name=request.name,
         description=request.description,
         status="draft",
+        codebase_path=request.codebase_path,
         created_by=current_user.id,
     )
-    
+
     db.add(project)
     await db.commit()
     await db.refresh(project)
-    
+
+    # If a codebase path is provided, trigger code-architect to wake up memory
+    if request.codebase_path:
+        asyncio.create_task(_trigger_architect_analysis(request.codebase_path))
+
     return ProjectResponse(
         id=str(project.id),
         name=project.name,
         description=project.description,
         status=project.status,
+        codebase_path=project.codebase_path,
         created_by=str(project.created_by),
         created_at=project.created_at.isoformat() if project.created_at else "",
         updated_at=project.updated_at.isoformat() if project.updated_at else None,
@@ -113,6 +126,7 @@ async def list_projects(
             name=project.name,
             description=project.description,
             status=latest_runs[str(project.id)].status if str(project.id) in latest_runs else project.status,
+            codebase_path=project.codebase_path,
             latest_run_id=str(latest_runs[str(project.id)].id) if str(project.id) in latest_runs else None,
             created_by=str(project.created_by),
             created_at=project.created_at.isoformat() if project.created_at else "",
@@ -221,3 +235,93 @@ async def delete_project(
     await db.commit()
 
     return {"message": "Project deleted successfully"}
+
+
+# ============================================================================
+# Code Architect integration helpers
+# ============================================================================
+
+async def _trigger_architect_analysis(codebase_path: str) -> None:
+    """Fire-and-forget: ask code-architect to analyze the given path."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                f"{CODE_ARCHITECT_URL}/api/analyze",
+                json={"project_path": codebase_path},
+            )
+    except Exception as exc:
+        # Non-fatal — code-architect may not be running
+        import logging
+        logging.getLogger(__name__).warning("code-architect trigger failed: %s", exc)
+
+
+@projects_router.get("/{project_id}/architect-status")
+async def get_architect_status(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return code-architect memory status for this project's codebase."""
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if not project.codebase_path:
+        return {"linked": False, "codebase_path": None, "has_memory": False}
+
+    # Ask code-architect if it knows about this path
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"{CODE_ARCHITECT_URL}/api/projects")
+            if resp.status_code == 200:
+                projects = resp.json().get("projects", [])
+                has_memory = any(
+                    p.get("project_path") == project.codebase_path
+                    for p in projects
+                )
+                return {
+                    "linked": True,
+                    "codebase_path": project.codebase_path,
+                    "has_memory": has_memory,
+                    "architect_url": CODE_ARCHITECT_URL,
+                }
+    except Exception:
+        pass
+
+    return {
+        "linked": True,
+        "codebase_path": project.codebase_path,
+        "has_memory": False,
+        "architect_url": CODE_ARCHITECT_URL,
+        "error": "code-architect unreachable",
+    }
+
+
+@projects_router.post("/{project_id}/wake-architect")
+async def wake_architect(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger code-architect to (re)analyze the linked codebase."""
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not project.codebase_path:
+        raise HTTPException(status_code=400, detail="Project has no linked codebase path")
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{CODE_ARCHITECT_URL}/api/analyze",
+                json={"project_path": project.codebase_path},
+            )
+            data = resp.json()
+            return {
+                "triggered": True,
+                "job_id": data.get("job_id"),
+                "project_id": data.get("project_id"),
+                "codebase_path": project.codebase_path,
+            }
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"code-architect unreachable: {exc}")

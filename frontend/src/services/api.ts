@@ -10,6 +10,7 @@ import type {
   ArtifactDetail,
   CreateProjectForm,
   StartWorkflowForm,
+  ArchitectStatus,
 } from '@/types'
 
 export interface AgentDef {
@@ -63,6 +64,12 @@ export const projectsApi = {
 
   delete: (id: string): Promise<void> =>
     api.delete(`/projects/${id}`).then(() => undefined),
+
+  architectStatus: (id: string): Promise<ArchitectStatus> =>
+    api.get(`/projects/${id}/architect-status`).then((res) => res.data),
+
+  wakeArchitect: (id: string): Promise<{ triggered: boolean; job_id?: string }> =>
+    api.post(`/projects/${id}/wake-architect`).then((res) => res.data),
 }
 
 // Workflows API

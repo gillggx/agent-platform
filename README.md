@@ -14,6 +14,7 @@ A FastAPI + React platform where PM, Architect, QA, DevOps, and Director agents 
 - **Document export** — Markdown auto-converted to professional `.docx` files
 - **Unified LLM interface** — supports OpenAI, Anthropic, OpenRouter, local Ollama via LiteLLM
 - **A2A integration** — Architect agent calls Code Architect service (`http://localhost:8001`) for codebase queries, code generation, validation, and impact analysis
+- **Codebase linking** — when creating a project, optionally link a local codebase path; Code Architect is automatically triggered to analyze and build architecture memory. Projects with memory show a 🧠 badge with a one-click re-analyze button.
 - **SQLite by default** — no Docker or PostgreSQL required for local development
 
 ---

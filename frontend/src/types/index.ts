@@ -13,10 +13,19 @@ export interface Project {
   name: string
   description?: string
   status: string
+  codebase_path?: string
   latest_run_id?: string
   created_by: string
   created_at: string
   updated_at?: string
+}
+
+export interface ArchitectStatus {
+  linked: boolean
+  codebase_path: string | null
+  has_memory: boolean
+  architect_url?: string
+  error?: string
 }
 
 export interface ProjectDetail extends Project {
@@ -103,6 +112,7 @@ export interface ArtifactDetail extends Artifact {
 export interface CreateProjectForm {
   name: string
   description?: string
+  codebase_path?: string
 }
 
 export interface StartWorkflowForm {

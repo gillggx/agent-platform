@@ -13,6 +13,7 @@ class Project(Base):
     name = Column(String(500), nullable=False)
     description = Column(Text)
     status = Column(String(20), default="draft")  # draft | running | completed | failed
+    codebase_path = Column(String(1000), nullable=True)  # local path linked to code-architect
     created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     
     created_at = Column(DateTime, default=func.now())
