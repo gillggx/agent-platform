@@ -1,0 +1,34 @@
+# Python 3.12+
+# Web Framework
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+websockets==12.0
+
+# Database (SQLite — no Docker needed)
+sqlalchemy[asyncio]==2.0.28
+aiosqlite==0.19.0
+alembic==1.13.1
+
+# Data Validation
+pydantic==2.6.3
+pydantic-settings==2.2.1
+
+# HTTP Client (for A2A calls to Code Architect)
+httpx==0.27.0
+
+# LLM Integration
+litellm==1.35.8
+
+# Document Processing
+python-docx==1.1.0
+mistune==3.0.2
+markdown==3.5.1
+
+# Utils
+python-multipart==0.0.9
+pytz==2024.1
+python-dotenv==1.0.1
+
+# Development / Testing
+pytest==8.1.1
+pytest-asyncio==0.23.5

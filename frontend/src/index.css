@@ -1,0 +1,115 @@
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+}
+
+/* Override Ant Design theme for light mode */
+html {
+  color-scheme: light;
+}
+
+body {
+  color: rgba(0, 0, 0, 0.88);
+  background-color: #ffffff;
+}
+
+/* Custom styles */
+.ant-layout {
+  min-height: 100vh;
+}
+
+.chat-container {
+  height: 400px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  padding: 16px;
+  background-color: #fafafa;
+  overflow-y: auto;
+}
+
+.agent-message {
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.agent-message.pm {
+  background-color: #e6f7ff;
+  border-left: 4px solid #1890ff;
+}
+
+.agent-message.architect {
+  background-color: #f6ffed;
+  border-left: 4px solid #52c41a;
+}
+
+.agent-message.qa {
+  background-color: #fff2e8;
+  border-left: 4px solid #fa8c16;
+}
+
+.agent-message.devops {
+  background-color: #f9f0ff;
+  border-left: 4px solid #722ed1;
+}
+
+.agent-message.director {
+  background-color: #fff1f0;
+  border-left: 4px solid #ff4d4f;
+}
+
+.agent-name {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.agent-content {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.workflow-step.active {
+  font-weight: 600;
+  color: #1890ff;
+}
+
+.workflow-step.completed {
+  color: #52c41a;
+}
+
+.workflow-step.pending {
+  color: rgba(0, 0, 0, 0.45);
+}
