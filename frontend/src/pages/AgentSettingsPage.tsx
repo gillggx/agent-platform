@@ -12,8 +12,11 @@ import {
   Divider,
   message,
   Tooltip,
+  Row,
+  Col,
+  Statistic,
 } from 'antd'
-import { SaveOutlined, InfoCircleOutlined, RobotOutlined } from '@ant-design/icons'
+import { SaveOutlined, InfoCircleOutlined, RobotOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { agentsApi } from '@/services/api'
 import type { AgentDef } from '@/services/api'
@@ -202,6 +205,55 @@ export default function AgentSettingsPage() {
           Soul 是 Agent 的 System Prompt，直接決定 AI 的行為模式。
         </Paragraph>
       </div>
+
+      {/* Overview cards */}
+      {!isLoading && (agents ?? []).length > 0 && (
+        <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
+          {(agents ?? []).map((agent) => (
+            <Col key={agent.role} xs={24} sm={12} md={8} lg={6} xl={4}>
+              <Card
+                size="small"
+                hoverable
+                style={{
+                  cursor: 'pointer',
+                  borderColor: activeTab === agent.role ? '#1677ff' : undefined,
+                  background: activeTab === agent.role ? '#f0f7ff' : undefined,
+                }}
+                onClick={() => setActiveTab(agent.role)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 20 }}>{ROLE_EMOJI[agent.role] ?? '🤖'}</span>
+                  <Tag color={ROLE_COLOR[agent.role] ?? 'default'} style={{ margin: 0 }}>
+                    {agent.display_name}
+                  </Tag>
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <Statistic
+                    title="Temp"
+                    value={agent.config.temperature ?? 0.7}
+                    precision={1}
+                    valueStyle={{ fontSize: 14 }}
+                  />
+                  <Statistic
+                    title="Max Tokens"
+                    value={agent.config.max_tokens ?? 4096}
+                    valueStyle={{ fontSize: 14 }}
+                  />
+                </div>
+                {agent.config.llm_model && (
+                  <div style={{ marginTop: 6 }}>
+                    <ThunderboltOutlined style={{ color: '#faad14', fontSize: 11 }} />
+                    {' '}
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      {agent.config.llm_model.split('/').pop()}
+                    </Text>
+                  </div>
+                )}
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      )}
 
       <Tabs
         activeKey={activeTab}

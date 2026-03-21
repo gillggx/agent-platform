@@ -4,93 +4,164 @@ STANDARD_SPEC_TEMPLATE = {
     "workflow": {
         "id": "standard-spec",
         "name": "標準 Spec 流程",
-        "description": "PM 起草 → Architect 技術審核 → QA 建立測試 → Director 最終審批",
-        "version": 1,
+        "description": "PM 雙人對話起草 → Architect 技術審核（可退回 PM）→ QA 審核並產出 Checklist（可退回 PM）→ Director 最終審批",
+        "version": 2,
         "steps": [
+            # ── Step 1: PM 雙人對話，起草初版 Spec ──────────────────────────
             {
-                "id": "pm_draft",
+                "id": "pm_dialogue",
                 "agent_role": "pm",
-                "task_type": "draft",
+                "task_type": "dialogue",
+                "config": {
+                    "min_rounds": 2,
+                    "max_rounds": 3,
+                },
                 "depends_on": [],
                 "routing": {
                     "type": "static",
                     "next_steps": ["architect_review"]
-                },
-                "loop": {
-                    "enabled": True,
-                    "max_iterations": 2,
-                    "escalate_to": "director_approve"
                 }
             },
+            # ── Step 2: Architect 審核技術可行性，產出技術規格 ───────────────
             {
                 "id": "architect_review",
                 "agent_role": "architect",
                 "task_type": "review",
-                "depends_on": ["pm_draft"],
+                "depends_on": ["pm_dialogue"],
                 "routing": {
                     "type": "llm_decision",
-                    "decision_prompt": "Review PM 的 spec，判斷技術可行性。",
+                    "decision_prompt": (
+                        "根據 Architect 文件最末的決策標記判斷路由：\n"
+                        "- 若包含 **決策：APPROVE** → 選擇『APPROVE，進入 QA 審核』\n"
+                        "- 若包含 **決策：RETURN_TO_PM** → 選擇『RETURN_TO_PM，退回 PM 修改』"
+                    ),
                     "options": [
                         {
-                            "label": "通過，進入 QA",
-                            "target_step": "qa_checklist",
-                            "condition_hint": "技術方案可行，無重大問題"
+                            "label": "APPROVE，進入 QA 審核",
+                            "target_step": "qa_review",
+                            "condition_hint": "技術規格已完成，無重大可行性問題"
                         },
                         {
-                            "label": "打回 PM 修改",
+                            "label": "RETURN_TO_PM，退回 PM 修改",
                             "target_step": "pm_revise",
-                            "condition_hint": "有技術問題需要 PM 調整需求"
+                            "condition_hint": "PM Spec 有技術問題需修正"
                         }
                     ]
                 },
                 "loop": {
                     "enabled": True,
                     "max_iterations": 2,
-                    "escalate_to": "director_approve"
+                    "escalate_to": "qa_review"
                 }
             },
+            # ── Step 3: PM 根據 Architect 意見修改 Spec ──────────────────────
             {
                 "id": "pm_revise",
-                "agent_role": "pm", 
+                "agent_role": "pm",
                 "task_type": "revise",
                 "depends_on": ["architect_review"],
                 "routing": {
                     "type": "static",
                     "next_steps": ["architect_review"]
+                },
+                "loop": {
+                    "enabled": True,
+                    "max_iterations": 2,
+                    "escalate_to": "qa_review"
                 }
             },
+            # ── Step 4: QA 審核，審核通過時產出 QA Checklist ─────────────────
             {
-                "id": "qa_checklist",
+                "id": "qa_review",
                 "agent_role": "qa",
-                "task_type": "draft", 
+                "task_type": "review",
                 "depends_on": ["architect_review"],
                 "routing": {
-                    "type": "static",
-                    "next_steps": ["director_approve"]
+                    "type": "llm_decision",
+                    "decision_prompt": (
+                        "根據 QA 文件最末的決策標記判斷路由：\n"
+                        "- 若包含 **決策：APPROVE** → 選擇『APPROVE，進入 Director 審批』\n"
+                        "- 若包含 **決策：RETURN_TO_PM** → 選擇『RETURN_TO_PM，退回 PM 修改』"
+                    ),
+                    "options": [
+                        {
+                            "label": "APPROVE，進入 Director 審批",
+                            "target_step": "director_approve",
+                            "condition_hint": "QA Checklist 已產出，spec 可測試性足夠"
+                        },
+                        {
+                            "label": "RETURN_TO_PM，退回 PM 修改",
+                            "target_step": "pm_revise_2",
+                            "condition_hint": "驗收標準不清或範圍邊界不明"
+                        }
+                    ]
+                },
+                "loop": {
+                    "enabled": True,
+                    "max_iterations": 2,
+                    "escalate_to": "director_approve"
                 }
             },
+            # ── Step 5: PM 根據 QA 意見修改 Spec ────────────────────────────
+            {
+                "id": "pm_revise_2",
+                "agent_role": "pm",
+                "task_type": "revise",
+                "depends_on": ["qa_review"],
+                "routing": {
+                    "type": "static",
+                    "next_steps": ["qa_review"]
+                },
+                "loop": {
+                    "enabled": True,
+                    "max_iterations": 2,
+                    "escalate_to": "director_approve"
+                }
+            },
+            # ── Step 6: Director 最終商業決策審批 ────────────────────────────
             {
                 "id": "director_approve",
                 "agent_role": "director",
                 "task_type": "approve",
-                "depends_on": ["qa_checklist"],
+                "depends_on": ["qa_review"],
                 "routing": {
                     "type": "llm_decision",
-                    "decision_prompt": "最終審核所有產出物的品質與完整度。",
+                    "decision_prompt": (
+                        "Director 站在商業與策略角度做最終決策：\n"
+                        "- 若整體方向、ROI、風險皆可接受 → 選擇『APPROVE，產出文件』\n"
+                        "- 若有重大商業或策略問題 → 選擇『REJECT，退回 PM 修改』"
+                    ),
                     "options": [
                         {
-                            "label": "批准，產出文件", 
+                            "label": "APPROVE，產出文件",
                             "target_step": "export",
-                            "condition_hint": "所有文件品質達標"
+                            "condition_hint": "商業目標清晰，風險可控，批准交付"
                         },
                         {
-                            "label": "需要修改",
-                            "target_step": "pm_revise", 
-                            "condition_hint": "仍有需要改善的地方"
+                            "label": "REJECT，退回 PM 修改",
+                            "target_step": "pm_revise_final",
+                            "condition_hint": "商業方向或優先順序需要調整"
                         }
                     ]
                 }
             },
+            # ── Step 7: PM 根據 Director 意見做最終修改 ──────────────────────
+            {
+                "id": "pm_revise_final",
+                "agent_role": "pm",
+                "task_type": "revise",
+                "depends_on": ["director_approve"],
+                "routing": {
+                    "type": "static",
+                    "next_steps": ["director_approve"]
+                },
+                "loop": {
+                    "enabled": True,
+                    "max_iterations": 2,
+                    "escalate_to": "export"
+                }
+            },
+            # ── Step 8: 完成，標記輸出 ───────────────────────────────────────
             {
                 "id": "export",
                 "agent_role": "system",
@@ -103,8 +174,8 @@ STANDARD_SPEC_TEMPLATE = {
             }
         ],
         "guardrails": {
-            "max_total_steps": 20,
-            "timeout_minutes": 30,
+            "max_total_steps": 30,
+            "timeout_minutes": 45,
             "require_human_approval": ["director_approve"]
         }
     }

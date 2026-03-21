@@ -14,6 +14,7 @@ from app.api.agents import agents_router
 from app.api.tools import tools_router
 from app.api.routine_checks import routine_checks_router
 from app.api.mock_data import mock_data_router
+from app.api.chat import chat_router
 from app.services.llm_adapter import llm_adapter
 
 # Import all models so Base.metadata knows about them
@@ -21,6 +22,7 @@ from app.models import (  # noqa: F401
     Organization, User, Project, AgentDefinition,
     KnowledgePack, KnowledgeDocument, WorkflowTemplate,
     WorkflowRun, StepExecution, AgentSession, Artifact, AgentMemory,
+    ChatMessage, GlobalMemory, ProjectMemory,
 )
 
 
@@ -101,6 +103,7 @@ app.include_router(agents_router, prefix="/api/v1/agents", tags=["Agents"])
 app.include_router(tools_router, prefix="/api/v1/tools", tags=["Tools"])
 app.include_router(routine_checks_router, prefix="/api/v1/routine-checks", tags=["Routine Checks"])
 app.include_router(mock_data_router, prefix="/api/v1/mock-data", tags=["Mock Data"])
+app.include_router(chat_router, prefix="/api/v1/chat", tags=["Chat"])
 
 # Global exception handler
 @app.exception_handler(Exception)

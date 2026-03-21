@@ -119,7 +119,7 @@ function StepCard({
     <Card
       size="small"
       style={{ marginBottom: 12, borderLeft: `4px solid ${borderColor}`, opacity: isDimmed ? 0.45 : 1, transition: 'opacity 0.3s' }}
-      bodyStyle={{ padding: 0 }}
+      styles={{ body: { padding: 0 } }}
     >
       {/* Header row — always visible, click to collapse */}
       <div
@@ -305,12 +305,12 @@ export default function WorkflowPage() {
         />
       )}
 
-      <Card size="small" style={{ marginBottom: 16 }} bodyStyle={{ padding: '10px 16px' }}>
+      <Card size="small" style={{ marginBottom: 16 }} styles={{ body: { padding: '10px 16px' } }}>
         <Space><UserOutlined /><Text type="secondary" style={{ fontSize: 13 }}>{workflowRun.user_input}</Text></Space>
       </Card>
 
       {/* Progress bar — each step has its own status, handles loops */}
-      <Card size="small" style={{ marginBottom: 16 }} bodyStyle={{ padding: '16px 24px' }}>
+      <Card size="small" style={{ marginBottom: 16 }} styles={{ body: { padding: '16px 24px' } }}>
         <Steps size="small"
           current={currentIndex >= 0 ? currentIndex : completedCount}
           items={stepsBarItems}
@@ -353,7 +353,7 @@ export default function WorkflowPage() {
             title={<Space><LoadingOutlined spin={workflowRun.status === 'running'} style={{ color: '#1890ff' }} /><span>執行記錄</span></Space>}
             size="small"
             style={{ marginTop: 8 }}
-            bodyStyle={{ padding: 0 }}
+            styles={{ body: { padding: 0 } }}
           >
             <div style={{
               maxHeight: 200, overflowY: 'auto', padding: '8px 16px',

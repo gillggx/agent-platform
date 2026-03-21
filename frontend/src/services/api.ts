@@ -80,6 +80,18 @@ export const workflowsApi = {
   getTemplate: (id: string): Promise<WorkflowTemplate> =>
     api.get(`/workflows/templates/${id}`).then((res) => res.data),
 
+  createTemplate: (data: { name: string; description?: string; definition: any }): Promise<WorkflowTemplate> =>
+    api.post('/workflows/templates', data).then((res) => res.data),
+
+  updateTemplate: (id: string, data: { name?: string; description?: string; definition?: any }): Promise<WorkflowTemplate> =>
+    api.put(`/workflows/templates/${id}`, data).then((res) => res.data),
+
+  deleteTemplate: (id: string): Promise<void> =>
+    api.delete(`/workflows/templates/${id}`).then(() => undefined),
+
+  cloneTemplate: (id: string): Promise<WorkflowTemplate> =>
+    api.post(`/workflows/templates/${id}/clone`).then((res) => res.data),
+
   startWorkflow: (data: StartWorkflowForm): Promise<WorkflowRun> =>
     api.post('/workflows/runs', data).then((res) => res.data),
 
@@ -118,6 +130,95 @@ export const agentsApi = {
 
   update: (role: string, data: UpdateAgentData): Promise<AgentDef> =>
     api.put(`/agents/${role}`, data).then((res) => res.data),
+}
+
+// Chat API
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  project_context_ids: string[]
+  created_at: string
+}
+
+export const chatApi = {
+  history: (limit = 50): Promise<ChatMessage[]> =>
+    api.get('/chat/history', { params: { limit } }).then((res) => res.data),
+
+  clearHistory: (): Promise<void> =>
+    api.delete('/chat/history').then(() => undefined),
+
+  memory: (): Promise<{ global_memory: string; updated_at: string | null }> =>
+    api.get('/chat/memory').then((res) => res.data),
+
+  startProject: (
+    projectName: string,
+    projectDescription: string,
+    templateId?: string,
+  ): Promise<{ project_id: string; run_id: string; project_name: string; template_name: string }> =>
+    api.post('/chat/start-project', {
+      project_name: projectName,
+      project_description: projectDescription,
+      template_id: templateId,
+    }).then((res) => res.data),
+
+  /**
+   * Stream a message to PM Agent via SSE.
+   * onDelta: called with each text chunk
+   * onDone: called when stream ends, with project_context_ids
+   * onError: called on error
+   */
+  streamMessage: (
+    message: string,
+    onDelta: (text: string) => void,
+    onDone: (contextIds: string[]) => void,
+    onError: (msg: string) => void,
+    onIntakeComplete?: (projectName: string, projectDescription: string) => void,
+    intakeAlreadyTriggered?: boolean,
+  ): AbortController => {
+    const controller = new AbortController()
+
+    fetch('/api/v1/chat/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, intake_already_triggered: intakeAlreadyTriggered ?? false }),
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const reader = res.body!.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() ?? ''
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            try {
+              const event = JSON.parse(line.slice(6))
+              if (event.type === 'delta') onDelta(event.content)
+              else if (event.type === 'done') onDone(event.project_context_ids ?? [])
+              else if (event.type === 'error') onError(event.content)
+              else if (event.type === 'intake_complete' && onIntakeComplete)
+                onIntakeComplete(event.project_name, event.project_description ?? '')
+            } catch {
+              // ignore malformed SSE line
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') onError(String(err))
+      })
+
+    return controller
+  },
 }
 
 // Health check

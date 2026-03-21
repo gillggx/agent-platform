@@ -103,6 +103,131 @@ async def get_workflow_template(
     )
 
 
+class CreateTemplateRequest(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    definition: Dict[str, Any]
+
+
+class UpdateTemplateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    definition: Optional[Dict[str, Any]] = None
+
+
+@workflows_router.post("/templates", response_model=WorkflowTemplateResponse)
+async def create_workflow_template(
+    request: CreateTemplateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a custom workflow template"""
+    current_user = await get_current_user(db)
+    template = WorkflowTemplate(
+        org_id=current_user.org_id,
+        name=request.name,
+        description=request.description,
+        definition=request.definition,
+        is_system=False,
+    )
+    db.add(template)
+    await db.commit()
+    await db.refresh(template)
+    return WorkflowTemplateResponse(
+        id=str(template.id),
+        name=template.name,
+        description=template.description or "",
+        is_system=template.is_system,
+        definition=template.definition,
+    )
+
+
+@workflows_router.put("/templates/{template_id}", response_model=WorkflowTemplateResponse)
+async def update_workflow_template(
+    template_id: str,
+    request: UpdateTemplateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a custom workflow template (system templates are read-only)"""
+    result = await db.execute(
+        select(WorkflowTemplate).where(WorkflowTemplate.id == template_id)
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    if template.is_system:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="System templates are read-only")
+
+    if request.name is not None:
+        template.name = request.name
+    if request.description is not None:
+        template.description = request.description
+    if request.definition is not None:
+        template.definition = request.definition
+
+    await db.commit()
+    await db.refresh(template)
+    return WorkflowTemplateResponse(
+        id=str(template.id),
+        name=template.name,
+        description=template.description or "",
+        is_system=template.is_system,
+        definition=template.definition,
+    )
+
+
+@workflows_router.delete("/templates/{template_id}")
+async def delete_workflow_template(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a custom workflow template (system templates cannot be deleted)"""
+    result = await db.execute(
+        select(WorkflowTemplate).where(WorkflowTemplate.id == template_id)
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    if template.is_system:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="System templates cannot be deleted")
+
+    await db.delete(template)
+    await db.commit()
+    return {"message": "Template deleted"}
+
+
+@workflows_router.post("/templates/{template_id}/clone", response_model=WorkflowTemplateResponse)
+async def clone_workflow_template(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Clone any template (system or custom) into a new custom template"""
+    current_user = await get_current_user(db)
+    result = await db.execute(
+        select(WorkflowTemplate).where(WorkflowTemplate.id == template_id)
+    )
+    source = result.scalar_one_or_none()
+    if not source:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+
+    cloned = WorkflowTemplate(
+        org_id=current_user.org_id,
+        name=f"{source.name}（複製）",
+        description=source.description,
+        definition=source.definition,
+        is_system=False,
+    )
+    db.add(cloned)
+    await db.commit()
+    await db.refresh(cloned)
+    return WorkflowTemplateResponse(
+        id=str(cloned.id),
+        name=cloned.name,
+        description=cloned.description or "",
+        is_system=cloned.is_system,
+        definition=cloned.definition,
+    )
+
+
 @workflows_router.post("/runs", response_model=WorkflowRunResponse)
 async def start_workflow(
     request: StartWorkflowRequest,

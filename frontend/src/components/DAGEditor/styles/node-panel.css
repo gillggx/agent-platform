@@ -1,0 +1,70 @@
+/* Node Panel Drawer */
+.node-panel-drawer .ant-drawer-content-wrapper {
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+}
+
+.node-panel-drawer .ant-drawer-header {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.node-panel-drawer .ant-drawer-body {
+  padding: 24px;
+}
+
+/* Form layout */
+.node-panel-drawer .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.node-panel-drawer .ant-form-item-label > label {
+  font-weight: 600;
+  color: #262626;
+}
+
+.node-panel-drawer .ant-divider {
+  margin: 24px 0;
+  font-weight: 600;
+  color: #262626;
+}
+
+/* Input/Output list */
+.io-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 32px;
+  align-items: center;
+}
+
+.io-list .ant-tag {
+  margin: 0;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.io-list .empty-state {
+  color: #8c8c8c;
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Buttons at bottom */
+.node-panel-drawer .ant-space {
+  width: 100%;
+}
+
+.node-panel-drawer .ant-button {
+  font-weight: 600;
+  height: 40px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .node-panel-drawer {
+    width: 100% !important;
+  }
+
+  .node-panel-drawer .ant-drawer-body {
+    padding: 16px;
+  }
+}

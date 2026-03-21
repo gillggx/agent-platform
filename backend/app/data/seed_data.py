@@ -131,10 +131,10 @@ async def seed_system_agents(db: AsyncSession):
             )
             db.add(agent)
             print(f"Created system agent: {agent_data['display_name']}")
-        elif soul_content and not existing_agent.soul:
-            # Backfill soul for existing agents that don't have one yet
+        elif soul_content:
+            # Always sync soul from file so edits to .md take effect on restart
             existing_agent.soul = soul_content
-            print(f"Backfilled soul for: {agent_data['display_name']}")
+            print(f"Synced soul for: {agent_data['display_name']}")
 
     await db.commit()
 
@@ -156,7 +156,7 @@ async def seed_workflow_templates(db: AsyncSession):
         
         if not existing_template:
             template = WorkflowTemplate(
-                org_id=None,  # System template, no org
+                org_id=None,
                 name=template_name,
                 description=template_data["workflow"]["description"],
                 definition=template_data,
@@ -164,6 +164,11 @@ async def seed_workflow_templates(db: AsyncSession):
             )
             db.add(template)
             print(f"Created system template: {template_name}")
+        else:
+            # Always update definition so template changes take effect on restart
+            existing_template.definition = template_data
+            existing_template.description = template_data["workflow"]["description"]
+            print(f"Updated system template: {template_name}")
     
     await db.commit()
 

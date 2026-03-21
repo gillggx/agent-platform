@@ -1,0 +1,123 @@
+/* Validation Panel */
+.validation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.validation-panel .ant-alert {
+  border-radius: 4px;
+}
+
+/* Error Card */
+.error-card {
+  border-color: #ff4d4f;
+  border-radius: 4px;
+}
+
+.error-card .ant-card-head {
+  background-color: #fef2f0;
+  border-bottom-color: #ff4d4f;
+}
+
+.error-card .ant-card-head-title {
+  color: #ff4d4f;
+  font-weight: 600;
+}
+
+.error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.error-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background-color: #fff1f0;
+  border-left: 3px solid #ff4d4f;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.error-item:hover {
+  background-color: #ffebe6;
+}
+
+.error-message {
+  color: #262626;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.error-node-id {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+/* Warning Card */
+.warning-card {
+  border-color: #faad14;
+  border-radius: 4px;
+}
+
+.warning-card .ant-card-head {
+  background-color: #fffbe6;
+  border-bottom-color: #faad14;
+}
+
+.warning-card .ant-card-head-title {
+  color: #faad14;
+  font-weight: 600;
+}
+
+.warning-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.warning-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background-color: #fffbe6;
+  border-left: 3px solid #faad14;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.warning-item:hover {
+  background-color: #fff7e6;
+}
+
+.warning-message {
+  color: #262626;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.warning-node-id {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .validation-panel {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .error-item,
+  .warning-item {
+    padding: 10px;
+    border-left-width: 2px;
+  }
+}

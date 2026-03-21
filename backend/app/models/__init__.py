@@ -9,18 +9,22 @@ from .workflow_run import WorkflowRun, StepExecution
 from .agent_session import AgentSession
 from .artifact import Artifact
 from .agent_memory import AgentMemory
+from .chat import ChatMessage, GlobalMemory, ProjectMemory
 
 __all__ = [
     "Organization",
-    "User", 
+    "User",
     "Project",
     "AgentDefinition",
     "KnowledgePack",
-    "KnowledgeDocument", 
+    "KnowledgeDocument",
     "WorkflowTemplate",
     "WorkflowRun",
     "StepExecution",
     "AgentSession",
     "Artifact",
     "AgentMemory",
+    "ChatMessage",
+    "GlobalMemory",
+    "ProjectMemory",
 ]

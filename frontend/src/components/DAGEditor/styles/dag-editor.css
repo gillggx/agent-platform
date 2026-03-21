@@ -1,0 +1,104 @@
+/* DAG Editor Container */
+.dag-editor-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+}
+
+/* Layout */
+.dag-editor-layout {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.dag-editor-layout .ant-layout-header {
+  padding: 0;
+  background-color: #ffffff;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dag-editor-layout .ant-layout-content {
+  background-color: #f9f9f9;
+  overflow: auto;
+  padding: 0;
+}
+
+/* Content Area */
+.dag-editor-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.dag-editor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Canvas Area */
+.dag-editor-main .dag-canvas-container {
+  flex: 1;
+  margin: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Loading State */
+.dag-editor-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 16px;
+  color: #8c8c8c;
+}
+
+/* Side Panels */
+.dag-editor-container .node-panel-drawer {
+  z-index: 1000;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .dag-editor-main .dag-canvas-container {
+    margin: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dag-editor-container {
+    height: auto;
+  }
+
+  .dag-editor-layout {
+    height: auto;
+  }
+
+  .dag-editor-main .dag-canvas-container {
+    margin: 8px;
+    height: 400px !important;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .dag-toolbar,
+  .node-panel-drawer,
+  .dag-editor-content {
+    display: none;
+  }
+
+  .dag-editor-main {
+    width: 100%;
+    height: auto;
+  }
+}
