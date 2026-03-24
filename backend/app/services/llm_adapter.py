@@ -76,6 +76,12 @@ class LLMAdapter:
             "api_key": api_key,
         }
 
+        # Pass custom base_url if configured (e.g. OpenRouter proxy or self-hosted)
+        if org_config and org_config.get("base_url"):
+            kwargs["api_base"] = org_config["base_url"]
+        elif "openrouter" in provider.lower() and settings.openrouter_base_url:
+            kwargs["api_base"] = settings.openrouter_base_url
+
         # 2.3.7 — Retry up to 3 attempts with per-call timeout; fail → session ERROR
         max_retries = 3
         call_timeout = 90  # seconds

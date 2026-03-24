@@ -144,6 +144,7 @@ async def _check_intake_complete(
             temperature=0.1,
             max_tokens=200,
             api_key=settings.llm_api_key,
+            api_base=settings.openrouter_base_url if "openrouter" in settings.llm_provider.lower() else None,
         )
         raw = response.choices[0].message.content.strip()
         # Strip markdown code fences if present
@@ -183,6 +184,7 @@ async def _update_global_memory_background(
             temperature=0.3,
             max_tokens=600,
             api_key=settings.llm_api_key,
+            api_base=settings.openrouter_base_url if "openrouter" in settings.llm_provider.lower() else None,
         )
         new_memory = response.choices[0].message.content
 
@@ -247,6 +249,7 @@ async def stream_pm_response(
             temperature=0.7,
             max_tokens=2048,
             api_key=settings.llm_api_key,
+            api_base=settings.openrouter_base_url if "openrouter" in settings.llm_provider.lower() else None,
             stream=True,
         )
         async for chunk in stream:
