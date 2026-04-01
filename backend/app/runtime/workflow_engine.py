@@ -17,6 +17,17 @@ from app.services.llm_adapter import llm_adapter
 from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 
+# Keep strong references to background tasks so GC doesn't collect them mid-execution.
+# Python 3.10+ only keeps weak refs to tasks; without this they can be GC'd before completing.
+_background_tasks: Set[asyncio.Task] = set()
+
+
+def _create_background_task(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
 
 @dataclass
 class WorkflowStep:
@@ -112,7 +123,7 @@ class WorkflowEngine:
         await db.commit()
 
         for step in root_steps:
-            asyncio.create_task(
+            _create_background_task(
                 self._execute_step_in_new_session(
                     run_id, step, workflow_def, user_input, project.org_id
                 )
@@ -129,11 +140,27 @@ class WorkflowEngine:
         org_id: str,
     ):
         """Execute a step using a fresh DB session (for async tasks)"""
+        import traceback
         async with AsyncSessionLocal() as db:
             try:
                 await self._dispatch_step(db, run_id, step, workflow_def, user_input, org_id)
             except Exception as e:
-                print(f"Step execution failed for {step.id}: {e}")
+                err_msg = f"❌ [{step.id}] 執行失敗：{e}"
+                print(f"\n[STEP ERROR] {err_msg}")
+                traceback.print_exc()
+                # Write failure into DB so it's visible in the workflow UI
+                try:
+                    result = await db.execute(select(WorkflowRun).where(WorkflowRun.id == run_id))
+                    wf = result.scalar_one_or_none()
+                    if wf:
+                        se = dict(wf.step_executions or {})
+                        self._add_log(se, err_msg)
+                        wf.step_executions = se
+                        flag_modified(wf, "step_executions")
+                        wf.status = "failed"
+                        await db.commit()
+                except Exception as db_err:
+                    print(f"[STEP ERROR] Failed to write error to DB: {db_err}")
     
     async def on_step_complete(
         self,
@@ -254,7 +281,7 @@ class WorkflowEngine:
 
         # NOW dispatch next steps — DB is committed, fresh sessions will read correct state
         for next_step in steps_to_dispatch:
-            asyncio.create_task(
+            _create_background_task(
                 self._execute_step_in_new_session(
                     run_id, next_step, workflow_def, workflow_run.user_input, org_id
                 )
@@ -340,7 +367,7 @@ class WorkflowEngine:
                 await db.commit()
                 # Dispatch AFTER commit
                 for next_step in steps_to_dispatch_resume:
-                    asyncio.create_task(
+                    _create_background_task(
                         self._execute_step_in_new_session(
                             run_id, next_step, workflow_def, workflow_run.user_input, project.org_id
                         )
@@ -359,7 +386,7 @@ class WorkflowEngine:
                 user_input = workflow_run.user_input or ""
                 if feedback:
                     user_input = f"{user_input}\n\n[Director 反饋]: {feedback}"
-                asyncio.create_task(
+                _create_background_task(
                     self._execute_step_in_new_session(
                         run_id, revise_step, workflow_def, user_input, project.org_id
                     )
