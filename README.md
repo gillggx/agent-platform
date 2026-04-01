@@ -150,10 +150,14 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# Edit .env — at minimum set LLM_API_KEY
+# Edit .env — set LLM_API_KEY at minimum (see Environment Variables below)
 
-python init_db.py      # creates SQLite DB and seeds default agents + templates
-uvicorn app.main:app --port 8080 --reload
+# IMPORTANT: Run this once before first launch.
+# Creates SQLite DB tables and seeds all default agents + workflow templates.
+# Without this step, PM agent and workflows will not function.
+python init_db.py
+
+uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 ### 2. Frontend
@@ -167,13 +171,51 @@ npm run dev   # http://localhost:2999
 ### 3. (Optional) Code Architect Agent
 
 ```bash
-# Clone and start the Code Architect service
 # https://github.com/gillggx/code-architect
 cd code-architect
 uvicorn app.main:app --port 8001 --reload
 ```
 
 Set `CODE_ARCHITECT_URL=http://localhost:8001` in `backend/.env` and link a codebase path when creating a project.
+
+---
+
+## Production Setup
+
+> **Key difference from dev:** run `init_db.py` once before the first server start. After that, restarting the server re-seeds souls and template definitions automatically.
+
+```bash
+# 1. Configure environment
+cp backend/.env.example backend/.env
+vi backend/.env   # set LLM_API_KEY, LLM_MODEL, SECRET_KEY
+
+# 2. Init DB (run ONCE — idempotent, safe to re-run)
+cd backend
+source .venv/bin/activate
+python init_db.py
+
+# Expected output:
+#   ✓ Database connection successful
+#   ✓ Database tables created
+#   Created system agent: PM Agent
+#   Created system agent: Architect Agent
+#   ...
+#   Created system template: 標準 Spec 流程
+#   ✓ Default system data seeded
+
+# 3. Start backend
+uvicorn app.main:app --host 0.0.0.0 --port 8080
+
+# 4. Build and serve frontend
+cd ../frontend
+npm install && npm run build
+# Serve dist/ with Nginx, or use: npx serve -s dist -l 2999
+```
+
+**Why PM agent doesn't respond without seeding:**
+The workflow engine looks up agent definitions from the DB by role (`pm`, `architect`, etc.).
+If `init_db.py` was never run, the DB has no agent rows and workflows fail silently.
+Running `init_db.py` (or restarting the server after first run) fixes this.
 
 ---
 

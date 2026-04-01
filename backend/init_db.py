@@ -15,11 +15,15 @@ import os
 # Add the app directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from app.core.config import settings
 from app.db.base import Base
 from app.data.seed_data import seed_all_defaults
 from app.db.base import AsyncSessionLocal
+
+# Import all models so Base.metadata knows about every table before create_all
+import app.models  # noqa: F401
 
 
 async def create_tables():
@@ -55,8 +59,7 @@ async def main():
         print("Testing database connection...")
         engine = create_async_engine(settings.database_url)
         async with engine.begin() as conn:
-            result = await conn.execute("SELECT 1")
-            result.fetchone()
+            await conn.execute(text("SELECT 1"))
         await engine.dispose()
         print("✓ Database connection successful")
         
