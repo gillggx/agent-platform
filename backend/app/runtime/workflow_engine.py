@@ -772,7 +772,7 @@ class WorkflowEngine:
         )
         r0 = await llm_adapter.complete(
             messages=[{"role": "system", "content": pm_soul}, {"role": "user", "content": init_prompt}],
-            temperature=temperature, max_tokens=2000, org_config=org_config,
+            temperature=temperature, max_tokens=3500, org_config=org_config,
         )
         initial_draft = r0.content
         dialogue_history.append({"speaker": "pm", "content": initial_draft, "label": "初版草稿"})
@@ -842,7 +842,7 @@ class WorkflowEngine:
                     "4. 初版骨架 + 討論補強的細節都要納入"
                 )},
             ],
-            temperature=temperature * 0.8, max_tokens=3000, org_config=org_config,
+            temperature=temperature * 0.8, max_tokens=6000, org_config=org_config,
         )
 
         # Build dialogue record for artifact
