@@ -359,3 +359,133 @@ class DocxExporter:
 
 # Global instance
 docx_exporter = DocxExporter()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Final delivery ZIP — one DOCX per role (latest version only) + history.md
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Friendly file names per agent role. Final ZIP keeps them in this order.
+ROLE_FILENAME = [
+    ("pm",        "01_產品規格書_Product_Spec"),
+    ("architect", "02_技術設計_Technical_Design"),
+    ("qa",        "03_測試計畫_QA_Checklist"),
+    ("devops",    "04_維運評估_DevOps_Review"),
+    ("director",  "05_最終決議_Director_Decision"),
+]
+
+
+def _pick_latest_by_role(artifacts: List[Artifact]) -> dict:
+    """
+    Return {role: Artifact} — for each agent_role, the most recent
+    non-superseded artifact. Prefers status='approved' over 'draft',
+    then highest version.
+    """
+    by_role: dict = {}
+    for a in artifacts:
+        if a.status == "superseded":
+            continue
+        current = by_role.get(a.agent_role)
+        if current is None:
+            by_role[a.agent_role] = a
+            continue
+        # Prefer approved over draft
+        if a.status == "approved" and current.status != "approved":
+            by_role[a.agent_role] = a
+        elif a.status == current.status and a.version > current.version:
+            by_role[a.agent_role] = a
+    return by_role
+
+
+def _build_history_md(project_name: str, workflow_run, template_name: str = "") -> str:
+    """
+    Build the workflow history markdown from WorkflowRun.step_executions._log.
+
+    Covers PM dialogue rounds, agent decisions, and final outcome.
+    """
+    se = dict(workflow_run.step_executions or {})
+    log_entries = se.get("_log", [])
+
+    started = workflow_run.created_at.strftime("%Y-%m-%d %H:%M:%S") if workflow_run.created_at else "—"
+    updated = workflow_run.updated_at.strftime("%Y-%m-%d %H:%M:%S") if workflow_run.updated_at else "—"
+
+    # Per-step iteration counts — skip "_log" key
+    step_iterations = {k: v.get("count", 0) for k, v in se.items() if k != "_log" and isinstance(v, dict)}
+
+    lines = [
+        f"# 工作流程歷程 — {project_name}",
+        "",
+        f"- **啟動時間：** {started}",
+        f"- **最後更新：** {updated}",
+        f"- **使用模板：** {template_name or '—'}",
+        f"- **最終狀態：** {workflow_run.status}",
+        "",
+        "---",
+        "",
+        "## 執行時間軸",
+        "",
+        "| 時間 | 事件 |",
+        "|------|------|",
+    ]
+    for entry in log_entries:
+        t = entry.get("time", "")
+        msg = entry.get("msg", "").replace("|", "\\|")
+        lines.append(f"| {t} | {msg} |")
+
+    lines += [
+        "",
+        "## 各步驟迭代次數",
+        "",
+    ]
+    if step_iterations:
+        lines.append("| 步驟 | 執行次數 |")
+        lines.append("|------|---------|")
+        for step_id, count in step_iterations.items():
+            lines.append(f"| {step_id} | {count} |")
+    else:
+        lines.append("_（無步驟執行紀錄）_")
+
+    return "\n".join(lines) + "\n"
+
+
+def build_final_delivery_zip(
+    project_name: str,
+    artifacts: List[Artifact],
+    workflow_run=None,
+    template_name: str = "",
+) -> bytes:
+    """
+    Build a ZIP containing:
+      - One DOCX per agent role (latest non-superseded version)
+      - 99_工作流程歷程.md derived from workflow run log
+
+    Returns bytes of the ZIP file.
+    """
+    import zipfile
+
+    latest_by_role = _pick_latest_by_role(artifacts)
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for role, filename_prefix in ROLE_FILENAME:
+            artifact = latest_by_role.get(role)
+            if artifact is None:
+                continue
+            docx_bytes = docx_exporter.export(
+                artifacts=[artifact],
+                project_name=project_name,
+                metadata={
+                    "agent_role": role,
+                    "version": artifact.version,
+                    "status": artifact.status,
+                },
+            )
+            zf.writestr(f"{filename_prefix}.docx", docx_bytes)
+
+        # History file (only if we have a workflow run)
+        if workflow_run is not None:
+            history_md = _build_history_md(project_name, workflow_run, template_name)
+            zf.writestr("99_工作流程歷程_Workflow_History.md", history_md.encode("utf-8"))
+
+    buffer.seek(0)
+    return buffer.getvalue()

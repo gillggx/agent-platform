@@ -12,7 +12,9 @@ from app.db.base import get_db
 from app.models.project import Project
 from app.models.artifact import Artifact
 from app.api.auth import get_current_user
-from app.services.document_export import docx_exporter
+from app.services.document_export import docx_exporter, build_final_delivery_zip
+from app.models.workflow_run import WorkflowRun
+from app.models.workflow_template import WorkflowTemplate
 from app.core.config import settings
 
 # Router
@@ -141,9 +143,17 @@ async def download_artifact_md(
 @artifacts_router.get("/projects/{project_id}/download")
 async def download_project_artifacts(
     project_id: str,
-    db: AsyncSession = Depends(get_db)
+    mode: str = "final",  # final | all
+    db: AsyncSession = Depends(get_db),
 ):
-    """Download all project artifacts as single .md file"""
+    """
+    Download project artifacts.
+
+    - mode=final (default): ZIP with one DOCX per agent role (latest version
+      only) + a workflow history markdown.
+    - mode=all: single .md file containing every non-superseded artifact
+      (legacy behaviour, kept for archival / debugging).
+    """
 
     project_result = await db.execute(
         select(Project).where(Project.id == project_id)
@@ -156,20 +166,14 @@ async def download_project_artifacts(
             detail="Project not found"
         )
 
-    # Load latest version of each artifact type
+    # Load all non-superseded artifacts
     result = await db.execute(
         select(Artifact)
-        .where(Artifact.project_id == project_id, Artifact.status == "draft")
-        .order_by(Artifact.artifact_type, Artifact.version.desc())
+        .where(Artifact.project_id == project_id)
+        .where(Artifact.status != "superseded")
+        .order_by(Artifact.agent_role, Artifact.version.desc())
     )
-    all_artifacts = result.scalars().all()
-
-    artifacts_by_type: dict = {}
-    for artifact in all_artifacts:
-        if artifact.artifact_type not in artifacts_by_type:
-            artifacts_by_type[artifact.artifact_type] = artifact
-
-    artifacts = list(artifacts_by_type.values())
+    artifacts = result.scalars().all()
 
     if not artifacts:
         raise HTTPException(
@@ -177,25 +181,57 @@ async def download_project_artifacts(
             detail="No artifacts found for this project"
         )
 
-    from datetime import datetime
-    sections = [
-        f"# {project.name} — 完整規格文件\n\n"
-        f"> 產出時間: {datetime.now().strftime('%Y-%m-%d %H:%M')}  |  產出物: {len(artifacts)} 份\n\n"
-        f"---\n\n"
-    ]
-    for artifact in artifacts:
-        title = artifact.artifact_type.replace("_", " ").title()
-        sections.append(
-            f"## {title}（{artifact.agent_role} · v{artifact.version}）\n\n"
-            + (artifact.content_md or "")
-            + "\n\n---\n\n"
+    if mode == "all":
+        # Legacy single-markdown mode
+        from datetime import datetime
+        sections = [
+            f"# {project.name} — 完整規格文件\n\n"
+            f"> 產出時間: {datetime.now().strftime('%Y-%m-%d %H:%M')}  |  產出物: {len(artifacts)} 份\n\n"
+            f"---\n\n"
+        ]
+        for artifact in artifacts:
+            title = artifact.artifact_type.replace("_", " ").title()
+            sections.append(
+                f"## {title}（{artifact.agent_role} · v{artifact.version}）\n\n"
+                + (artifact.content_md or "")
+                + "\n\n---\n\n"
+            )
+        md_content = "".join(sections).encode("utf-8")
+        filename = f"{project.name}_完整規格.md".replace(" ", "_")
+        return StreamingResponse(
+            io.BytesIO(md_content),
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"},
         )
 
-    md_content = "".join(sections).encode("utf-8")
-    filename = f"{project.name}_完整規格.md".replace(" ", "_")
+    # Default: mode=final — build ZIP with one DOCX per role + history.md
+    # Load latest workflow run for history context
+    run_result = await db.execute(
+        select(WorkflowRun)
+        .where(WorkflowRun.project_id == project_id)
+        .order_by(WorkflowRun.created_at.desc())
+        .limit(1)
+    )
+    workflow_run = run_result.scalar_one_or_none()
 
+    template_name = ""
+    if workflow_run:
+        tmpl_result = await db.execute(
+            select(WorkflowTemplate).where(WorkflowTemplate.id == workflow_run.template_id)
+        )
+        tmpl = tmpl_result.scalar_one_or_none()
+        template_name = tmpl.name if tmpl else ""
+
+    zip_bytes = build_final_delivery_zip(
+        project_name=project.name,
+        artifacts=list(artifacts),
+        workflow_run=workflow_run,
+        template_name=template_name,
+    )
+
+    filename = f"{project.name}_Final_Delivery.zip".replace(" ", "_")
     return StreamingResponse(
-        io.BytesIO(md_content),
-        media_type="text/markdown; charset=utf-8",
+        io.BytesIO(zip_bytes),
+        media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"}
     )
