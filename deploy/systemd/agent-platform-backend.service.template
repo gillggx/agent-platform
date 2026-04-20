@@ -1,0 +1,29 @@
+# agent-platform backend — systemd service template
+#
+# Variables to replace before use:
+#   ${APP_DIR}      — e.g. /opt/agent-platform
+#   ${RUN_USER}     — e.g. ubuntu
+#   ${BACKEND_PORT} — e.g. 8080
+#
+# Install target: /etc/systemd/system/agent-platform-backend.service
+
+[Unit]
+Description=Agent Platform Backend (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=${RUN_USER}
+Group=${RUN_USER}
+WorkingDirectory=${APP_DIR}/backend
+EnvironmentFile=${APP_DIR}/backend/.env
+ExecStart=${APP_DIR}/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port ${BACKEND_PORT} --workers 1
+Restart=always
+RestartSec=5
+MemoryMax=600M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-platform-backend
+
+[Install]
+WantedBy=multi-user.target

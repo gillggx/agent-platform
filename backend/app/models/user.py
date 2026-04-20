@@ -16,6 +16,9 @@ class User(Base):
     role = Column(String(20), default="member")  # admin | member
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    # Anonymous browser ID — UUID stored in client's localStorage, sent via X-Client-ID header.
+    # Lets each browser have isolated chat history / memory / projects without real auth.
+    anonymous_id = Column(String(36), unique=True, index=True, nullable=True)
     
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -50,9 +50,10 @@ class StartProjectResponse(BaseModel):
 async def send_message(
     request: SendMessageRequest,
     db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
 ):
     """Send a message to PM Agent and stream the response via SSE."""
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
 
     async def event_stream():
         async for chunk in stream_pm_response(
@@ -78,12 +79,13 @@ async def send_message(
 async def start_project(
     request: StartProjectRequest,
     db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
 ):
     """
     Create a project and kick off the default workflow from an intake conversation.
     Called when user confirms the PM intake summary.
     """
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
 
     # Resolve template
     if request.template_id:
@@ -139,8 +141,9 @@ async def start_project(
 async def get_history(
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
 ):
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
     result = await db.execute(
         select(ChatMessage)
         .where(ChatMessage.user_id == current_user.id)
@@ -161,17 +164,23 @@ async def get_history(
 
 
 @chat_router.delete("/history")
-async def clear_history(db: AsyncSession = Depends(get_db)):
+async def clear_history(
+    db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
+):
     from sqlalchemy import delete
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
     await db.execute(delete(ChatMessage).where(ChatMessage.user_id == current_user.id))
     await db.commit()
     return {"message": "Chat history cleared"}
 
 
 @chat_router.get("/memory")
-async def get_memory(db: AsyncSession = Depends(get_db)):
-    current_user = await get_current_user(db)
+async def get_memory(
+    db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
+):
+    current_user = await get_current_user(db, client_id=x_client_id)
     result = await db.execute(
         select(GlobalMemory).where(GlobalMemory.user_id == current_user.id)
     )

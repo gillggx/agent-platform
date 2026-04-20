@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -49,10 +49,11 @@ class WorkflowRunDetailResponse(WorkflowRunResponse):
 # Routes
 @workflows_router.get("/templates", response_model=List[WorkflowTemplateResponse])
 async def list_workflow_templates(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
 ):
     """List available workflow templates"""
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
     
     # Load system templates and user's org templates
     result = await db.execute(
@@ -119,9 +120,10 @@ class UpdateTemplateRequest(BaseModel):
 async def create_workflow_template(
     request: CreateTemplateRequest,
     db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
 ):
     """Create a custom workflow template"""
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
     template = WorkflowTemplate(
         org_id=current_user.org_id,
         name=request.name,
@@ -199,9 +201,10 @@ async def delete_workflow_template(
 async def clone_workflow_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
 ):
     """Clone any template (system or custom) into a new custom template"""
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
     result = await db.execute(
         select(WorkflowTemplate).where(WorkflowTemplate.id == template_id)
     )
@@ -231,10 +234,11 @@ async def clone_workflow_template(
 @workflows_router.post("/runs", response_model=WorkflowRunResponse)
 async def start_workflow(
     request: StartWorkflowRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
 ):
     """Start a new workflow execution"""
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
     
     # Verify project ownership
     project_result = await db.execute(

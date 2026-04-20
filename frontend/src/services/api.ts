@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getClientId } from '@/utils/clientId'
 import type {
   User,
   Project,
@@ -43,7 +44,13 @@ const api = axios.create({
   timeout: 60000,  // 60s for LLM calls
 })
 
-// No auth interceptors needed for prototype
+// Attach per-browser anonymous ID to every request.
+// Backend uses X-Client-ID to scope chat history / memory / projects per browser.
+api.interceptors.request.use((config) => {
+  config.headers = config.headers ?? {}
+  config.headers['X-Client-ID'] = getClientId()
+  return config
+})
 
 // Auth API (minimal — no real auth)
 export const authApi = {
@@ -180,7 +187,10 @@ export const chatApi = {
 
     fetch('/api/v1/chat/message', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-ID': getClientId(),
+      },
       body: JSON.stringify({ message, intake_already_triggered: intakeAlreadyTriggered ?? false }),
       signal: controller.signal,
     })

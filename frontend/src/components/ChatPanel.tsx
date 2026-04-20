@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Button, Input, Typography, Tag, Space, message as antMessage } from 'antd'
-import { SendOutlined, LoadingOutlined, RocketOutlined, CheckCircleOutlined } from '@ant-design/icons'
+import { Button, Input, Typography, Tag, Space, Tooltip, Popconfirm, message as antMessage } from 'antd'
+import { SendOutlined, LoadingOutlined, RocketOutlined, CheckCircleOutlined, DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { chatApi } from '@/services/api'
@@ -225,6 +225,19 @@ export default function ChatPanel({ projects }: Props) {
     }
   }
 
+  const handleClearChat = async () => {
+    try {
+      await chatApi.clearHistory()
+      setMessages([])
+      setIntake(null)
+      setIntakeTriggered(false)
+      queryClient.invalidateQueries({ queryKey: ['chat-history'] })
+      antMessage.success('對話記錄已清除（專案不受影響）')
+    } catch (err) {
+      antMessage.error('清除失敗')
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* Header */}
@@ -233,12 +246,32 @@ export default function ChatPanel({ projects }: Props) {
         borderBottom: '1px solid #f0f0f0',
         background: '#fff',
         flexShrink: 0,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
       }}>
-        <Text strong style={{ fontSize: 16 }}>🤖 PM Co-pilot</Text>
-        <br />
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          告訴我你想做什麼，我會幫你釐清需求、回答問題
-        </Text>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Text strong style={{ fontSize: 16 }}>🤖 PM Co-pilot</Text>
+            <Tooltip title="對話記錄綁定此瀏覽器的匿名 ID；清除對話不會影響已建立的專案。">
+              <InfoCircleOutlined style={{ color: '#999', fontSize: 12 }} />
+            </Tooltip>
+          </div>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            告訴我你想做什麼，我會幫你釐清需求、回答問題
+          </Text>
+        </div>
+        <Popconfirm
+          title="清除對話記錄？"
+          description="只會清除聊天歷史，已建立的專案不會被刪除。"
+          okText="確定清除"
+          cancelText="取消"
+          onConfirm={handleClearChat}
+        >
+          <Button size="small" icon={<DeleteOutlined />} type="text">
+            清除對話
+          </Button>
+        </Popconfirm>
       </div>
 
       {/* Messages */}

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
 from pydantic import BaseModel
@@ -48,10 +48,11 @@ class ProjectDetailResponse(ProjectResponse):
 @projects_router.post("", response_model=ProjectResponse)
 async def create_project(
     request: CreateProjectRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
 ):
     """Create new project"""
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
     
     project = Project(
         org_id=current_user.org_id,
@@ -84,10 +85,11 @@ async def create_project(
 
 @projects_router.get("", response_model=List[ProjectResponse])
 async def list_projects(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
 ):
     """List user's projects"""
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
 
     result = await db.execute(
         select(Project)
@@ -139,10 +141,11 @@ async def list_projects(
 @projects_router.get("/{project_id}", response_model=ProjectDetailResponse)
 async def get_project(
     project_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
 ):
     """Get project details"""
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
     
     # Load project
     result = await db.execute(
@@ -192,10 +195,11 @@ async def get_project(
 @projects_router.delete("/{project_id}")
 async def delete_project(
     project_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_client_id: Optional[str] = Header(default=None, alias="X-Client-ID"),
 ):
     """Delete project"""
-    current_user = await get_current_user(db)
+    current_user = await get_current_user(db, client_id=x_client_id)
     
     result = await db.execute(
         select(Project)

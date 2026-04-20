@@ -1,0 +1,88 @@
+# agent-platform — Nginx config template
+#
+# Variables to replace before use (install.sh handles this with envsubst):
+#   ${DOMAIN}    — e.g. agent-platform.example.com
+#   ${APP_DIR}   — e.g. /opt/agent-platform
+#   ${BACKEND_PORT} — e.g. 8080
+#
+# SSL paths come from certbot default layout:
+#   /etc/letsencrypt/live/${DOMAIN}/fullchain.pem
+#   /etc/letsencrypt/live/${DOMAIN}/privkey.pem
+# Run `certbot certonly --webroot -w /var/www/certbot -d ${DOMAIN}`
+# before loading this config.
+
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name ${DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_session_cache   shared:SSL:10m;
+
+    client_max_body_size 20M;
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/javascript;
+    gzip_min_length 1024;
+
+    root ${APP_DIR}/frontend/dist;
+    index index.html;
+
+    # PM co-pilot SSE streaming — MUST disable buffering for SSE to work
+    location = /api/v1/chat/message {
+        proxy_pass          http://127.0.0.1:${BACKEND_PORT};
+        proxy_http_version  1.1;
+        proxy_set_header    Host              $host;
+        proxy_set_header    X-Real-IP         $remote_addr;
+        proxy_set_header    X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto $scheme;
+        proxy_buffering     off;
+        proxy_cache         off;
+        proxy_read_timeout  300s;
+        proxy_send_timeout  300s;
+        chunked_transfer_encoding off;
+    }
+
+    # All other backend API
+    location /api/v1/ {
+        proxy_pass          http://127.0.0.1:${BACKEND_PORT};
+        proxy_http_version  1.1;
+        proxy_set_header    Host              $host;
+        proxy_set_header    X-Real-IP         $remote_addr;
+        proxy_set_header    X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto $scheme;
+        proxy_read_timeout  120s;
+        proxy_send_timeout  120s;
+    }
+
+    # Health & docs
+    location = /health { proxy_pass http://127.0.0.1:${BACKEND_PORT}; }
+    location = /docs { proxy_pass http://127.0.0.1:${BACKEND_PORT}; }
+    location = /openapi.json { proxy_pass http://127.0.0.1:${BACKEND_PORT}; }
+
+    # Static assets — cache aggressively
+    location /assets/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # SPA fallback — all unmatched routes serve index.html so React Router can handle them
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
