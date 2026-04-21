@@ -99,11 +99,25 @@ DATABASE_URL=sqlite+aiosqlite:////opt/agent-platform/backend/data/app.db
 SECRET_KEY=REPLACE_WITH_RANDOM_32_CHARS  # openssl rand -hex 32
 ```
 
-Generate a fresh `SECRET_KEY`:
+### Generate + install `SECRET_KEY` in one command
+
+Copy this **exact line** to your terminal (no edits needed):
+
 ```bash
-SK=$(openssl rand -hex 32)
-sudo sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$SK|" /opt/agent-platform/backend/.env
+sudo sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$(openssl rand -hex 32)|" /opt/agent-platform/backend/.env
 ```
+
+It generates a fresh random 64-hex string and writes it directly into
+`/opt/agent-platform/backend/.env`. Verify:
+
+```bash
+grep ^SECRET_KEY /opt/agent-platform/backend/.env
+# SECRET_KEY=<your-unique-64-char-hex>
+```
+
+> ⚠️ **Never reuse the same `SECRET_KEY` across servers.** Run the command
+> above on every fresh deployment. Don't copy an example value from
+> documentation — those are intentionally public and predictable.
 
 ---
 

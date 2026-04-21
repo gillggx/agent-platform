@@ -55,19 +55,34 @@ ADMIN_EMAIL=you@gmail.com
 
 ## `SECRET_KEY` — 伺服器自己用的隨機字串（不用你自己想）
 
-這是伺服器內部加密用的鑰匙，你**不會直接用到**。
+這是伺服器內部加密用的鑰匙，你**不會直接用到**，但每台伺服器要不一樣。
 
-**做法：** 在伺服器上跑一行指令自動產：
+### 最快做法：一行指令直接把 `.env` 改好
+
+SSH 到伺服器後，在終端機跑這行（**照抄即可**）：
+
 ```bash
-openssl rand -hex 32
+sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$(openssl rand -hex 32)|" /opt/agent-platform/backend/.env
 ```
 
-會輸出類似這樣的東西（每次都不同）：
-```
-fd6a513efe3c5df1ffcb5a001c281dde15fb13fbfae53016184cf38140aba99b
+這行做三件事：
+1. 跑 `openssl rand -hex 32` 產一串隨機 64 位元字
+2. 把 `.env` 裡 `SECRET_KEY=xxx` 整行換成新的
+3. 你不用手動複製貼上，也不會貼錯
+
+### 驗證有寫進去
+
+```bash
+grep ^SECRET_KEY /opt/agent-platform/backend/.env
+# 應該看到類似：
+# SECRET_KEY=04a84d03b5abccf72cd33109d26ef0499c491476439460b4c0954cdc17638714
 ```
 
-拿這串貼到 `.env` 的 `SECRET_KEY=` 後面。
+### ⚠️ 不要這樣做
+
+- ❌ 把上面那串 `04a84d03...` 抄進自己的 `.env`（那是文件範例，所有人都看得到）
+- ❌ 所有環境共用同一個 `SECRET_KEY`
+- ✅ **每一台伺服器都用 `openssl rand -hex 32` 產一個新的**
 
 ---
 
