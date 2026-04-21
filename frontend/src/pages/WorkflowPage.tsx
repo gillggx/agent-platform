@@ -152,7 +152,7 @@ function StepCard({
           )}
           {isCompleted && hasOutput && !isExportStep && (
             <Button size="small" icon={<DownloadOutlined />}
-              onClick={(e) => { e.stopPropagation(); onDownload(artifactId!, `${step.id}_v${exec?.count ?? 1}.docx`) }}>
+              onClick={(e) => { e.stopPropagation(); onDownload(artifactId!, `${step.id}_v${exec?.count ?? 1}.md`) }}>
               下載
             </Button>
           )}
@@ -236,7 +236,8 @@ export default function WorkflowPage() {
     try {
       const blob = await artifactsApi.downloadProject(workflowRun.project_id)
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = '完整規格文件.md'; a.click()
+      // Backend returns a .zip (Final_Delivery package); name accordingly.
+      const a = document.createElement('a'); a.href = url; a.download = '最終交付包.zip'; a.click()
       URL.revokeObjectURL(url)
     } catch { message.error('下載失敗') }
   }
@@ -245,7 +246,8 @@ export default function WorkflowPage() {
     try {
       const blob = await artifactsApi.download(artifactId)
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = filename.replace(/\.docx$/, '.md'); a.click()
+      // Backend serves this endpoint as markdown (.md); keep that extension.
+      const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
       URL.revokeObjectURL(url)
     } catch { message.error('下載失敗') }
   }
