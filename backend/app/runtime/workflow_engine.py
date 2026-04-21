@@ -436,11 +436,20 @@ class WorkflowEngine:
         matches = pattern.findall(content or "")
         return matches[-1].upper() if matches else None
 
-    def _match_option_by_label(self, label: str, options: List[dict]) -> Optional[dict]:
-        """Find option whose 'label' matches the decision keyword (case-insensitive)."""
-        lbl = (label or "").strip().upper()
+    def _match_option_by_label(self, decision: str, options: List[dict]) -> Optional[dict]:
+        """
+        Find the option whose 'label' contains the decision keyword.
+
+        Template labels look like "APPROVE，進入 QA 審核" or
+        "RETURN_TO_PM，退回 PM 修改". The decision marker emitted by
+        agents is just the keyword ("APPROVE" / "RETURN_TO_PM" /
+        "REJECT"), so we match by substring, not equality.
+        """
+        kw = (decision or "").strip().upper()
+        if not kw:
+            return None
         for opt in options:
-            if (opt.get("label") or "").strip().upper() == lbl:
+            if kw in (opt.get("label") or "").upper():
                 return opt
         return None
 
