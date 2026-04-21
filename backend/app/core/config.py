@@ -21,10 +21,14 @@ class Settings(BaseSettings):
         f"sqlite+aiosqlite:///{DATA_DIR / 'app.db'}"
     )
     
-    # LLM — use litellm + OpenRouter
+    # LLM — use litellm, supports OpenRouter, OpenAI, Anthropic, and any
+    # OpenAI-compatible endpoint (internal vLLM/TGI/Ollama/gateway etc.)
     llm_provider: str = os.getenv("LLM_PROVIDER", "openrouter")
     llm_api_key: Optional[str] = os.getenv("LLM_API_KEY")
     llm_model: str = os.getenv("LLM_MODEL", "openrouter/google/gemini-2.0-flash-001")
+    # Generic override. Use for internal / self-hosted endpoints.
+    # Takes priority over provider-specific defaults when set.
+    llm_base_url: Optional[str] = os.getenv("LLM_BASE_URL")
     
     # Agent Settings
     agent_session_timeout_minutes: int = 5

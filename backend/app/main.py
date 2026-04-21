@@ -44,8 +44,8 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as db:
         await seed_all_defaults(db)
     
-    # Test LLM connection
-    if settings.llm_api_key:
+    # Test LLM connection — works for either key-based or keyless endpoints.
+    if settings.llm_api_key or settings.llm_base_url:
         print("Testing LLM connection...")
         try:
             is_connected = await llm_adapter.test_connection()
@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"LLM connection test failed: {e}")
     else:
-        print("⚠️  LLM_API_KEY not set - some features will not work")
+        print("⚠️  Neither LLM_API_KEY nor LLM_BASE_URL is set — PM Agent and workflows will fail")
     
     print(f"Server ready at http://localhost:8080")
     print(f"Frontend should proxy to this backend")
@@ -86,12 +86,16 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    # LLM is considered "configured" if either an API key is set
+    # OR a custom base URL is set (internal / keyless endpoints).
+    llm_configured = bool(settings.llm_api_key) or bool(settings.llm_base_url)
     return {
         "status": "ok",
         "app": settings.app_name,
         "version": settings.version,
         "llm_model": settings.llm_model,
-        "llm_configured": bool(settings.llm_api_key),
+        "llm_base_url": settings.llm_base_url or settings.openrouter_base_url,
+        "llm_configured": llm_configured,
     }
 
 # Include routers

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.chat import ChatMessage, GlobalMemory, ProjectMemory
 from app.models.project import Project
+from app.services.llm_adapter import LLMAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +144,7 @@ async def _check_intake_complete(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=200,
-            api_key=settings.llm_api_key,
-            api_base=settings.openrouter_base_url if "openrouter" in settings.llm_provider.lower() else None,
+            **LLMAdapter.resolve_credentials(),
         )
         raw = response.choices[0].message.content.strip()
         # Strip markdown code fences if present
@@ -183,8 +183,7 @@ async def _update_global_memory_background(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=600,
-            api_key=settings.llm_api_key,
-            api_base=settings.openrouter_base_url if "openrouter" in settings.llm_provider.lower() else None,
+            **LLMAdapter.resolve_credentials(),
         )
         new_memory = response.choices[0].message.content
 
@@ -248,9 +247,8 @@ async def stream_pm_response(
             messages=messages,
             temperature=0.7,
             max_tokens=2048,
-            api_key=settings.llm_api_key,
-            api_base=settings.openrouter_base_url if "openrouter" in settings.llm_provider.lower() else None,
             stream=True,
+            **LLMAdapter.resolve_credentials(),
         )
         async for chunk in stream:
             delta = chunk.choices[0].delta.content or ""

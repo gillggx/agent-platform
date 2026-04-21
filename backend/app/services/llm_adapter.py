@@ -27,8 +27,19 @@ class LLMResponse:
 
 
 class LLMAdapter:
-    """Unified LLM interface using LiteLLM + OpenRouter"""
-    
+    """Unified LLM interface using LiteLLM.
+
+    Supports: OpenRouter, OpenAI, Anthropic, or any OpenAI-compatible
+    endpoint (internal vLLM / TGI / Ollama / self-hosted gateway etc.).
+
+    For internal/keyless endpoints, leave LLM_API_KEY empty and set
+    LLM_BASE_URL to the internal URL.
+    """
+
+    # LiteLLM requires api_key to be a non-empty string for most providers,
+    # even if the actual endpoint doesn't authenticate. Use this sentinel.
+    _DUMMY_KEY = "not-needed"
+
     def __init__(self):
         import os
         # Default model from config
@@ -37,6 +48,29 @@ class LLMAdapter:
         if settings.llm_api_key and "openrouter" in settings.llm_provider.lower():
             os.environ["OPENROUTER_API_KEY"] = settings.llm_api_key
     
+    @classmethod
+    def resolve_credentials(cls) -> Dict[str, Any]:
+        """
+        Return the kwargs for api_key / api_base that should be passed to
+        any direct litellm call. Used by pm_agent and other services that
+        bypass the LLMAdapter.complete() path.
+
+        Handles:
+          - Keyless internal endpoints (substitutes dummy key)
+          - Generic LLM_BASE_URL for self-hosted / internal services
+          - Legacy OPENROUTER_BASE_URL for openrouter provider
+        """
+        api_key = settings.llm_api_key or cls._DUMMY_KEY
+        base_url = None
+        if settings.llm_base_url:
+            base_url = settings.llm_base_url
+        elif "openrouter" in settings.llm_provider.lower() and settings.openrouter_base_url:
+            base_url = settings.openrouter_base_url
+        result = {"api_key": api_key}
+        if base_url:
+            result["api_base"] = base_url
+        return result
+
     async def complete(
         self,
         messages: List[Dict[str, str]],
@@ -65,8 +99,11 @@ class LLMAdapter:
             model_name = model or self.default_model
             provider = settings.llm_provider
 
+        # For internal / keyless endpoints we pass a dummy key — the LiteLLM
+        # client refuses to run without one, but the upstream typically
+        # ignores it when access control is network-based.
         if not api_key:
-            raise Exception("LLM_API_KEY not set. Configure it in .env or org settings.")
+            api_key = self._DUMMY_KEY
 
         kwargs = {
             "model": model_name,
@@ -76,9 +113,14 @@ class LLMAdapter:
             "api_key": api_key,
         }
 
-        # Pass custom base_url if configured (e.g. OpenRouter proxy or self-hosted)
+        # api_base resolution (most-specific first):
+        #   1. org_config.base_url              — per-org override
+        #   2. settings.llm_base_url            — global LLM_BASE_URL env
+        #   3. settings.openrouter_base_url     — only when provider=openrouter
         if org_config and org_config.get("base_url"):
             kwargs["api_base"] = org_config["base_url"]
+        elif settings.llm_base_url:
+            kwargs["api_base"] = settings.llm_base_url
         elif "openrouter" in provider.lower() and settings.openrouter_base_url:
             kwargs["api_base"] = settings.openrouter_base_url
 

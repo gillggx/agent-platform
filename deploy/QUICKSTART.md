@@ -73,10 +73,10 @@ fd6a513efe3c5df1ffcb5a001c281dde15fb13fbfae53016184cf38140aba99b
 
 ## 最終 `backend/.env` 範本
 
-以下是你部署到新環境時，`backend/.env` 應該長的樣子：
+### 情境 A：用 OpenRouter（雲端，有 API key）
 
 ```bash
-# ── 必改（唯一要你動的）──────────────────────────────
+# ── 必改 ──────────────────────────────
 LLM_API_KEY=sk-or-v1-你的OpenRouter金鑰貼這裡
 
 # ── 用指令產、只改一次 ────────────────────────────
@@ -89,6 +89,32 @@ LLM_MODEL=openrouter/openai/gpt-oss-120b
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 DATABASE_URL=sqlite+aiosqlite:////opt/agent-platform/backend/data/app.db
 ```
+
+### 情境 B：用公司內部 LLM（OpenAI-compatible，沒 API key）
+
+如果你的 GPT-OSS-120B 是跑在公司內網、有一個 endpoint URL、靠 VPN 保護、**沒有 API key** 的情況：
+
+```bash
+# ── 必改：填你公司 LLM 的 URL ─────────────────────────
+LLM_BASE_URL=https://llm.company.internal/v1
+LLM_MODEL=openai/gpt-oss-120b        # 或你公司給的 model 別名
+LLM_API_KEY=                          # ← 留空
+
+# ── 用指令產、只改一次 ────────────────────────────
+# 跑：openssl rand -hex 32
+SECRET_KEY=fd6a513efe3c5df1ffcb5a001c281dde15fb13fbfae53016184cf38140aba99b
+
+# ── 下面全部照抄 ─────────────────────────────────
+LLM_PROVIDER=openai
+DATABASE_URL=sqlite+aiosqlite:////opt/agent-platform/backend/data/app.db
+```
+
+**驗證：** 部署完後跑 `curl https://<your-domain>/health`，應該看到：
+```json
+{"llm_configured": true, "llm_base_url": "https://llm.company.internal/v1"}
+```
+
+> ℹ️ 如果公司 endpoint 其實需要一個 token（不完全 keyless），把 token 填到 `LLM_API_KEY=` 即可，其他不變。
 
 ---
 
