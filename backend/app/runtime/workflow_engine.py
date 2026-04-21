@@ -416,6 +416,34 @@ class WorkflowEngine:
         else:
             return []
     
+    def _extract_decision_marker(self, content: str) -> Optional[str]:
+        """
+        Scan artifact content for an explicit decision marker.
+        Looks for patterns like:
+          **決策：APPROVE**
+          **決策：RETURN_TO_PM**
+          **決策：REJECT**
+          **Decision: APPROVE**
+        Returns the last match (since final decision is usually at the end),
+        or None if no marker found.
+        """
+        import re
+        # Allow for optional spaces, both 中英文 colons, and **Decision** variant
+        pattern = re.compile(
+            r"\*\*\s*(?:決策|Decision)\s*[:：]\s*(APPROVE|RETURN_TO_PM|REJECT)\s*\*\*",
+            re.IGNORECASE,
+        )
+        matches = pattern.findall(content or "")
+        return matches[-1].upper() if matches else None
+
+    def _match_option_by_label(self, label: str, options: List[dict]) -> Optional[dict]:
+        """Find option whose 'label' matches the decision keyword (case-insensitive)."""
+        lbl = (label or "").strip().upper()
+        for opt in options:
+            if (opt.get("label") or "").strip().upper() == lbl:
+                return opt
+        return None
+
     async def _llm_route(
         self,
         db: AsyncSession,
@@ -424,62 +452,95 @@ class WorkflowEngine:
         artifact: Artifact,
         workflow_def: WorkflowDefinition,
     ) -> List[str]:
-        """Use LLM to make routing decision"""
-        
+        """Route next step based on the agent's decision marker.
+
+        Strategy (layered, cheap → expensive):
+          1. Regex for **決策：XXX** marker in the artifact (primary).
+          2. LLM classifier on artifact TAIL (last 2000 chars) as fallback.
+          3. Static default = first option (usually APPROVE).
+        """
         routing = completed_step.routing
         decision_prompt = routing.get("decision_prompt", "Decide the next step in the workflow.")
         options = routing.get("options", [])
-        
+
         if not options:
             return []
-        
-        # Build context for Director LLM
-        context_parts = [
-            f"Workflow: {workflow_def.name}",
-            f"Completed step: {completed_step.id} ({completed_step.agent_role})",
-            f"Generated artifact: {artifact.artifact_type}",
-            f"Artifact content preview: {artifact.content_md[:500]}...",
-            "",
-            decision_prompt,
-            "",
-            "Available options:",
-        ]
-        
-        for i, option in enumerate(options):
-            context_parts.append(
-                f"{i+1}. {option['label']}: {option.get('condition_hint', '')}"
-            )
-        
-        context_parts.append("")
-        context_parts.append("Respond with only the number of your chosen option (1, 2, etc.).")
-        
-        try:
-            response = await llm_adapter.complete(
-                messages=[
-                    {
-                        "role": "system", 
-                        "content": "You are a Director Agent making workflow routing decisions. Choose the best next step based on the current state."
-                    },
-                    {
-                        "role": "user",
-                        "content": "\n".join(context_parts)
-                    }
-                ],
-                max_tokens=10,
-                temperature=0.1,
-            )
-            
-            # Parse response
-            chosen_option = options[0]  # default
-            raw_choice = response.content.strip()
-            try:
-                choice_num = int(raw_choice)
-                if 1 <= choice_num <= len(options):
-                    chosen_option = options[choice_num - 1]
-            except ValueError:
-                pass
 
-            log_route = f"🔀 [{completed_step.id}] 路由決策：{chosen_option['label']} → {chosen_option['target_step']}"
+        content = artifact.content_md or ""
+        chosen_option: Optional[dict] = None
+        decision_source = "default"
+        raw_choice = ""
+
+        # ── Layer 1: Regex marker extraction ─────────────────────────────
+        marker = self._extract_decision_marker(content)
+        if marker:
+            matched = self._match_option_by_label(marker, options)
+            if matched:
+                chosen_option = matched
+                decision_source = "regex_marker"
+                raw_choice = marker
+
+        # ── Layer 2: LLM classifier on the TAIL of the artifact ──────────
+        if chosen_option is None:
+            tail = content[-2000:] if len(content) > 2000 else content
+            context_parts = [
+                f"Workflow: {workflow_def.name}",
+                f"Completed step: {completed_step.id} ({completed_step.agent_role})",
+                f"Generated artifact type: {artifact.artifact_type}",
+                "",
+                "Artifact ending (the decision marker, if any, is here):",
+                "---",
+                tail,
+                "---",
+                "",
+                decision_prompt,
+                "",
+                "Available options (pick the one matching the agent's actual decision):",
+            ]
+            for i, option in enumerate(options):
+                context_parts.append(
+                    f"{i+1}. {option['label']}: {option.get('condition_hint', '')}"
+                )
+            context_parts += [
+                "",
+                "If the artifact contains a marker like **決策：APPROVE** or "
+                "**決策：RETURN_TO_PM**, use it. If multiple markers exist, use the LAST.",
+                "Respond with ONLY the option number (1, 2, ...).",
+            ]
+
+            try:
+                response = await llm_adapter.complete(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a routing classifier. Pick the option matching the agent's actual decision. Reply with a single number.",
+                        },
+                        {"role": "user", "content": "\n".join(context_parts)},
+                    ],
+                    max_tokens=10,
+                    temperature=0.0,
+                )
+                raw_choice = response.content.strip()
+                try:
+                    choice_num = int(raw_choice)
+                    if 1 <= choice_num <= len(options):
+                        chosen_option = options[choice_num - 1]
+                        decision_source = "llm_classifier"
+                except ValueError:
+                    pass
+            except Exception as e:
+                print(f"[ROUTING] LLM classifier failed: {e}")
+
+        # ── Layer 3: Default to first option ─────────────────────────────
+        if chosen_option is None:
+            chosen_option = options[0]
+            decision_source = "default_first_option"
+
+        try:
+            log_route = (
+                f"🔀 [{completed_step.id}] 路由決策：{chosen_option['label']} → "
+                f"{chosen_option['target_step']}（來源：{decision_source}）"
+            )
             print(f"[ROUTING] {log_route}")
 
             # Embed route log + routing_decision in-memory (no separate commit — caller commits)
@@ -492,6 +553,7 @@ class WorkflowEngine:
                 "chosen_label": chosen_option["label"],
                 "target_step": chosen_option["target_step"],
                 "decided_at": datetime.utcnow().isoformat(),
+                "source": decision_source,
             }
             workflow_run.step_executions = se
             flag_modified(workflow_run, "step_executions")

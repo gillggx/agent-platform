@@ -463,6 +463,17 @@ def build_final_delivery_zip(
     """
     import zipfile
 
+    def _utf8_info(filename: str) -> zipfile.ZipInfo:
+        """
+        Build a ZipInfo with the UTF-8 flag set (bit 11 / 0x800).
+        Without this, Windows unzip tools mis-decode Chinese filenames
+        as cp437/ANSI garbage.
+        """
+        info = zipfile.ZipInfo(filename)
+        info.flag_bits |= 0x800
+        info.compress_type = zipfile.ZIP_DEFLATED
+        return info
+
     latest_by_role = _pick_latest_by_role(artifacts)
 
     buffer = io.BytesIO()
@@ -480,12 +491,15 @@ def build_final_delivery_zip(
                     "status": artifact.status,
                 },
             )
-            zf.writestr(f"{filename_prefix}.docx", docx_bytes)
+            zf.writestr(_utf8_info(f"{filename_prefix}.docx"), docx_bytes)
 
         # History file (only if we have a workflow run)
         if workflow_run is not None:
             history_md = _build_history_md(project_name, workflow_run, template_name)
-            zf.writestr("99_工作流程歷程_Workflow_History.md", history_md.encode("utf-8"))
+            zf.writestr(
+                _utf8_info("99_工作流程歷程_Workflow_History.md"),
+                history_md.encode("utf-8"),
+            )
 
     buffer.seek(0)
     return buffer.getvalue()
