@@ -125,8 +125,10 @@ class LLMAdapter:
             kwargs["api_base"] = settings.openrouter_base_url
 
         # 2.3.7 — Retry up to 3 attempts with per-call timeout; fail → session ERROR
+        # 300s handles long synthesis calls (6k-token Chinese PRD output)
+        # without timing out on slow provider or internal-network latency.
         max_retries = 3
-        call_timeout = 90  # seconds
+        call_timeout = 300  # seconds
         last_error: Optional[Exception] = None
 
         for attempt in range(1, max_retries + 1):

@@ -46,7 +46,11 @@ function AgentEditor({ agent }: { agent: AgentDef }) {
 
   const mutation = useMutation({
     mutationFn: (values: any) => {
-      const { display_name, description, soul, temperature, max_tokens, llm_model, llm_provider, llm_api_key } = values
+      const {
+        display_name, description, soul,
+        temperature, max_tokens,
+        llm_model, llm_provider, llm_api_key, llm_base_url,
+      } = values
       return agentsApi.update(agent.role, {
         display_name,
         description,
@@ -57,6 +61,7 @@ function AgentEditor({ agent }: { agent: AgentDef }) {
           ...(llm_model ? { llm_model } : {}),
           ...(llm_provider ? { llm_provider } : {}),
           ...(llm_api_key ? { llm_api_key } : {}),
+          ...(llm_base_url ? { llm_base_url } : {}),
         },
       })
     },
@@ -78,6 +83,7 @@ function AgentEditor({ agent }: { agent: AgentDef }) {
     llm_model: agent.config.llm_model ?? '',
     llm_provider: agent.config.llm_provider ?? '',
     llm_api_key: agent.config.llm_api_key ?? '',
+    llm_base_url: (agent.config as any).llm_base_url ?? '',
   }
 
   return (
@@ -143,9 +149,17 @@ function AgentEditor({ agent }: { agent: AgentDef }) {
       <Form.Item
         label="API Key（留空使用全局設定）"
         name="llm_api_key"
-        tooltip="為此 Agent 指定獨立的 API Key，適合使用不同帳號或不同 provider 的情況"
+        tooltip="為此 Agent 指定獨立的 API Key，適合使用不同帳號或不同 provider 的情況。內部 keyless endpoint 留空即可。"
       >
-        <Input.Password placeholder="sk-or-..." />
+        <Input.Password placeholder="sk-or-...（內部 endpoint 可留空）" />
+      </Form.Item>
+
+      <Form.Item
+        label="Base URL（留空使用全局設定）"
+        name="llm_base_url"
+        tooltip="自訂 API endpoint，用於公司內部或自架 OpenAI-compatible LLM。設了會覆蓋 .env 的 LLM_BASE_URL。"
+      >
+        <Input placeholder="https://llm.company.internal/v1" />
       </Form.Item>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -171,12 +185,26 @@ function AgentEditor({ agent }: { agent: AgentDef }) {
   )
 }
 
+interface HealthInfo {
+  llm_model?: string
+  llm_base_url?: string
+  llm_configured?: boolean
+}
+
 export default function AgentSettingsPage() {
   const [activeTab, setActiveTab] = useState('pm')
 
   const { data: agents, isLoading } = useQuery({
     queryKey: ['agents'],
     queryFn: agentsApi.list,
+  })
+
+  // Show the server-level LLM defaults so the user knows what kicks in
+  // when a per-agent override is blank.
+  const { data: health } = useQuery<HealthInfo>({
+    queryKey: ['health'],
+    queryFn: () => fetch('/health').then((r) => r.json()),
+    staleTime: 60_000,
   })
 
   const tabItems = (agents ?? []).map((agent) => ({
@@ -204,6 +232,25 @@ export default function AgentSettingsPage() {
           為每個 Agent 定義靈魂（Soul）、個性、工作風格，以及獨立的 LLM 模型設定。
           Soul 是 Agent 的 System Prompt，直接決定 AI 的行為模式。
         </Paragraph>
+
+        {health && (
+          <Card size="small" style={{ marginTop: 12, background: '#f6ffed', borderColor: '#b7eb8f' }}>
+            <Space size="large" wrap>
+              <Space size={4}>
+                <ThunderboltOutlined style={{ color: '#52c41a' }} />
+                <Text type="secondary" style={{ fontSize: 12 }}>全局預設 LLM：</Text>
+                <Text code style={{ fontSize: 12 }}>{health.llm_model ?? '—'}</Text>
+              </Space>
+              <Space size={4}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Base URL：</Text>
+                <Text code style={{ fontSize: 12 }}>{health.llm_base_url ?? '—'}</Text>
+              </Space>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                （下方 agent 留白 = 使用這些全局設定）
+              </Text>
+            </Space>
+          </Card>
+        )}
       </div>
 
       {/* Overview cards */}

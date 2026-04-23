@@ -148,16 +148,25 @@ class SessionManager:
                     org = org_result.scalar_one_or_none()
                     org_config = (org.llm_config or {}) if org else None
 
-            # Per-agent LLM config overrides (model/provider/api_key from agent_def.config)
+            # Per-agent LLM config overrides. Note the key-name mapping:
+            # agent_def.config stores UI-facing names (llm_*), but llm_adapter
+            # expects bare names (model, provider, api_key, base_url).
             agent_def_result = await db.execute(
                 select(AgentDefinition).where(AgentDefinition.id == session.agent_def_id)
             )
             _agent_def_for_llm = agent_def_result.scalar_one_or_none()
             agent_llm_config = {}
             if _agent_def_for_llm and _agent_def_for_llm.config:
-                for key in ("llm_model", "llm_provider", "llm_api_key"):
-                    if _agent_def_for_llm.config.get(key):
-                        agent_llm_config[key] = _agent_def_for_llm.config[key]
+                cfg = _agent_def_for_llm.config
+                key_map = {
+                    "llm_model": "model",
+                    "llm_provider": "provider",
+                    "llm_api_key": "api_key",
+                    "llm_base_url": "base_url",
+                }
+                for src, dst in key_map.items():
+                    if cfg.get(src):
+                        agent_llm_config[dst] = cfg[src]
             # Agent config takes precedence over org config
             effective_config = {**(org_config or {}), **agent_llm_config} or None
 

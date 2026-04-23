@@ -26,6 +26,7 @@ export interface AgentDef {
     llm_model?: string
     llm_provider?: string
     llm_api_key?: string
+    llm_base_url?: string
     [key: string]: any
   }
   is_system: string

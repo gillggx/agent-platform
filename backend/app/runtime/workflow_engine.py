@@ -750,10 +750,28 @@ class WorkflowEngine:
                 await db.commit()
 
         except Exception as e:
+            err_msg = f"❌ [{step.id}] 執行失敗：{e}"
             print(f"\n[AGENT ERROR] 💥 {step.id}: {e}")
             import traceback
             traceback.print_exc()
-    
+            # Surface the failure in the UI: write a log entry, drop the step
+            # from current_steps, and flip the run status to 'failed'. Otherwise
+            # the UI shows status=running forever.
+            try:
+                r2 = await db.execute(select(WorkflowRun).where(WorkflowRun.id == run_id))
+                wf = r2.scalar_one_or_none()
+                if wf is not None:
+                    se = dict(wf.step_executions or {})
+                    self._add_log(se, err_msg)
+                    current_steps = [s for s in (wf.current_steps or []) if s != step.id]
+                    wf.step_executions = se
+                    wf.current_steps = current_steps
+                    wf.status = "failed"
+                    flag_modified(wf, "step_executions")
+                    await db.commit()
+            except Exception as db_err:
+                print(f"[AGENT ERROR] Also failed to write error to DB: {db_err}")
+
     async def _execute_dialogue_step(
         self,
         db: AsyncSession,
